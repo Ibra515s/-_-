@@ -1,32 +1,40 @@
 const { createApp, seedAdmin } = require('../server/app');
 const { connect } = require('../server/db');
 
-let appInstance = null;
-let initPromise = null;
+let ready = false;
+let readyPromise = null;
 
-async function init() {
-  if (!initPromise) {
-    initPromise = (async () => {
+function ensureReady() {
+  if (!readyPromise) {
+    readyPromise = (async () => {
       await connect();
       await seedAdmin();
-      return createApp();
+      ready = true;
     })();
   }
-  return initPromise;
+  return readyPromise;
 }
 
+const app = createApp();
+
 module.exports = async (req, res) => {
-  try {
-    if (!appInstance) {
-      appInstance = await init();
+  if (!ready) {
+    try {
+      await ensureReady();
+    } catch (err) {
+      console.error('Vercel DB connection error:', err);
+      return res.status(500).json({
+        error: 'database_connection_failed',
+        message: 'فشل الاتصال بقاعدة البيانات. تأكد من إضافة MONGODB_URI في Environment Variables على Vercel والتصريح من 0.0.0.0/0 في MongoDB Atlas.',
+        details: err.message
+      });
     }
-    return appInstance(req, res);
-  } catch (err) {
-    console.error('Vercel serverless init error:', err);
-    res.status(500).json({
-      error: 'database_connection_failed',
-      message: 'تعذر الاتصال بقاعدة البيانات. تأكد من إضافة MONGODB_URI في Environment Variables على Vercel وتصريح الاتصال 0.0.0.0/0 في MongoDB Atlas.',
-      details: err.message
-    });
   }
+
+  return new Promise((resolve, reject) => {
+    res.on('finish', resolve);
+    res.on('close', resolve);
+    res.on('error', reject);
+    app(req, res);
+  });
 };
