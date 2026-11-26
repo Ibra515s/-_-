@@ -27,9 +27,7 @@ function randomFrom(alphabet, len) {
 const genIdSuffix = () => randomFrom(ID_ALPHABET, 5);
 const genTempPassword = () => randomFrom(TEMP_ALPHABET, 8);
 
-/** يحوّل أي إدخال (يدوي أو من QR) إلى صيغة FJ-7K4P9 أو null إن كان غير صالح */
-function normalizeCode(input) {
-  if (typeof input !== 'string' || input.length > 40) return null;
+function strictCode(input) {
   const s = toLatinDigits(input)
     .toUpperCase()
     .replace(/[\s‎‏‪-‮]/g, '')
@@ -37,6 +35,34 @@ function normalizeCode(input) {
   const m = /^([A-Z]{2,4})-?([A-Z0-9]{5})$/.exec(s);
   return m ? `${m[1]}-${m[2]}` : null;
 }
+
+/**
+ * يحوّل أي إدخال (يدوي، أو محتوى QR) إلى صيغة FJ-7K4P9 أو null إن كان غير صالح.
+ * يقبل المعرف وحده، أو رابط البطاقة الكامل (https://site/c/FJ-7K4P9) فيستخرج المعرف منه.
+ */
+function normalizeCode(input) {
+  if (typeof input !== 'string' || input.length > 300) return null;
+  const trimmed = input.trim();
+  if (/^https?:\/\//i.test(trimmed)) {
+    let u;
+    try { u = new URL(trimmed); } catch { return null; }
+    const last = (p) => decodeURIComponent(p).split(/[\/?]/).filter(Boolean).pop() || '';
+    const cands = [last(u.pathname), last(u.hash.replace(/^#/, '')), u.searchParams.get('id'), u.searchParams.get('code')];
+    for (const c of cands) { const r = c && strictCode(c); if (r) return r; }
+    return null;
+  }
+  if (trimmed.length > 40) return null;
+  return strictCode(trimmed);
+}
+
+/** عنوان الموقع العام (لرابط البطاقة داخل QR). يمكن تثبيته بـ PUBLIC_URL */
+function publicBase(req) {
+  if (process.env.PUBLIC_URL) return process.env.PUBLIC_URL.replace(/\/+$/, '');
+  const proto = String(req.get('x-forwarded-proto') || req.protocol || 'http').split(',')[0].trim();
+  const host = String(req.get('x-forwarded-host') || req.get('host') || 'localhost').split(',')[0].trim();
+  return `${proto}://${host}`;
+}
+const cardUrl = (base, code) => `${base}/c/${code}`;
 
 // ---------- كلمات المرور (scrypt) ----------
 const SCRYPT = { N: 16384, r: 8, p: 1, keylen: 32 };
@@ -149,7 +175,7 @@ function displayName(fullName, mode) {
 }
 
 module.exports = {
-  HttpError, genIdSuffix, genTempPassword, normalizeCode, toLatinDigits,
+  HttpError, genIdSuffix, genTempPassword, normalizeCode, publicBase, cardUrl, toLatinDigits,
   hashPassword, verifyPassword, sha256, newToken,
   WEEKDAYS_AR, dateInTz, isValidDate, addDays, weekdayAr, fmtDMY, isValidTimezone,
   cleanText, validateFullName, validateAge, validatePhone, validatePassword, nowIso, displayName,

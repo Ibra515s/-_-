@@ -221,7 +221,7 @@ router.post('/admin/participants/:id/reset-password', async (req, res) => {
 router.get('/admin/qr/:code.svg', async (req, res) => {
   const code = U.normalizeCode(req.params.code);
   if (!code) throw new HttpError(400, 'invalid_code', 'معرف غير صالح.');
-  res.type('image/svg+xml').send(await qrSvg(code));
+  res.type('image/svg+xml').send(await qrSvg(U.cardUrl(U.publicBase(req), code)));
 });
 
 // ---------- تصدير البطاقات (PDF) ----------
@@ -235,7 +235,8 @@ router.post('/admin/cards/pdf', async (req, res) => {
   if (!rows.length) throw new HttpError(400, 'nothing_to_export', 'لا توجد بطاقات للتصدير.');
   await logAction(A.actorOf(req), 'cards_exported', b.scope || 'all', { count: rows.length, batch_id: b.batch_id ?? null });
   res.set({ 'Content-Type': 'application/pdf', 'Content-Disposition': `attachment; filename="cards-${today()}.pdf"`, 'Cache-Control': 'no-store' });
-  renderCardsPdf(rows.map((r) => r.public_id), res);
+  const base = U.publicBase(req);
+  renderCardsPdf(rows.map((r) => r.public_id), res, (id) => U.cardUrl(base, id));
 });
 
 // ---------- تصدير الحسابات (CSV) ----------

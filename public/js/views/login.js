@@ -46,6 +46,10 @@ export async function loginView() {
   const showError = (msg) => { errBox.replaceChildren(msg ? errorBox(msg) : ''); };
   const stopScan = () => { scanner?.stop(); scanner = null; camBox.classList.add('hidden'); camBox.replaceChildren(); };
 
+  // قادم من رابط البطاقة (QR)
+  if (state.loginCode) { idInput.value = state.loginCode; state.loginCode = null; setTimeout(() => { pw.input.focus(); toast('تمت قراءة البطاقة. أدخل كلمة المرور.', 'ok'); }, 0); }
+  if (state.flash) { showError(state.flash); state.flash = null; }
+
   async function startScan() {
     showError('');
     const video = h('video', { autoplay: true, playsinline: true, muted: true });

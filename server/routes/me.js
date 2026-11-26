@@ -1,7 +1,7 @@
 const express = require('express');
 const QRCode = require('qrcode');
 const { C, getSetting, today } = require('../db');
-const { addDays, weekdayAr, fmtDMY } = require('../util');
+const { addDays, weekdayAr, fmtDMY, publicBase, cardUrl } = require('../util');
 const A = require('../auth');
 const LB = require('../services/leaderboard');
 
@@ -25,9 +25,9 @@ router.get('/me/profile', async (req, res) => {
   });
 });
 
-// نفس رمز البطاقة المطبوعة تمامًا (محتواه = المعرف فقط)
+// نفس رمز البطاقة المطبوعة تمامًا (رابط الموقع + المعرف)
 router.get('/me/qr.svg', async (req, res) => {
-  res.type('image/svg+xml').set('Cache-Control', 'private, max-age=3600').send(await qrSvg(req.auth.user.public_id));
+  res.type('image/svg+xml').set('Cache-Control', 'private, max-age=3600').send(await qrSvg(cardUrl(publicBase(req), req.auth.user.public_id)));
 });
 
 router.get('/me/history', async (req, res) => {

@@ -1,7 +1,7 @@
 import { h, $, clear, icon, spinner, toast, setTimezone } from './dom.js';
 import * as api from './api.js';
 
-export const state = { info: null, me: null, pendingCode: null };
+export const state = { info: null, me: null, pendingCode: null, loginCode: null, flash: null };
 const root = $('#app');
 let leave = null;
 let renderToken = 0;
@@ -103,11 +103,25 @@ const shellScan = (content, me) => h('div', null,
 // ---------- التوجيه ----------
 const PUBLIC_PATHS = ['/login', '/staff-login', '/activate'];
 
+// فتح رابط البطاقة (من مسح QR بكاميرا الهاتف): جديد ← التفعيل، لديه حساب ← تسجيل الدخول
+async function openCard(code, me) {
+  if (me.type) return replace(homeFor(me));
+  try {
+    const r = await api.post('/auth/lookup', { code });
+    if (r.state === 'pending') { state.pendingCode = r.public_id; return replace('#/activate'); }
+    if (r.state === 'active') { state.loginCode = r.public_id; return replace('#/login'); }
+    state.flash = r.state === 'suspended' ? 'هذا الحساب موقوف. راجع المشرف.' : r.message;
+  } catch (e) { state.flash = e.message; }
+  replace('#/login');
+}
+
 async function render() {
   const token = ++renderToken;
   leave?.(); leave = null;
   const [path] = (location.hash.replace(/^#/, '') || '/').split('?');
   const me = state.me;
+
+  if (path.startsWith('/c/')) { let code = path.slice(3); try { code = decodeURIComponent(code); } catch { /* */ } return openCard(code, me); }
 
   // حراس المسارات
   if (!me.type) {

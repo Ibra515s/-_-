@@ -2,7 +2,7 @@ const express = require('express');
 const crypto = require('crypto');
 const { PUBLIC_DIR, TRUST_PROXY } = require('./config');
 const { C, getSettings, getLogoBuffer, logAction, nextId, isDup } = require('./db');
-const { HttpError, hashPassword, nowIso } = require('./util');
+const { HttpError, hashPassword, nowIso, normalizeCode } = require('./util');
 const A = require('./auth');
 const LB = require('./services/leaderboard');
 
@@ -82,6 +82,13 @@ function createApp() {
   });
 
   app.use('/api', (req, res) => { throw new HttpError(404, 'not_found', 'غير موجود.'); });
+
+  // رابط البطاقة داخل QR: /c/FJ-XXXXX ← تتولى الواجهة التوجيه (تفعيل إن كان جديدًا، أو تسجيل الدخول)
+  app.get('/c/:code', (req, res) => {
+    const code = normalizeCode(req.params.code);
+    res.set('Cache-Control', 'no-store');
+    res.redirect(302, `/#/c/${code || encodeURIComponent(String(req.params.code).slice(0, 40))}`);
+  });
 
   app.use(express.static(PUBLIC_DIR, {
     setHeaders(res, file) {

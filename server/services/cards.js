@@ -108,7 +108,7 @@ function drawCard(doc, publicId, ox, oy, ctx) {
   const qrSize = mm(33);
   const qrX = ox + pad - mm(1);
   const qrY = oy + (H - qrSize) / 2 + mm(0.8);
-  drawQr(doc, publicId, qrX, qrY, qrSize);
+  drawQr(doc, ctx.qrTextFor ? ctx.qrTextFor(publicId) : publicId, qrX, qrY, qrSize);
 
   // المنطقة اليمنى
   const rx0 = qrX + qrSize + mm(1.5);
@@ -153,7 +153,7 @@ function drawFooter(doc, pageNo, pages) {
  * يولّد PDF للبطاقات ويكتبه إلى stream. ست بطاقات في كل صفحة A4 (عمودان × ثلاثة صفوف).
  * @param {string[]} publicIds
  */
-function renderCardsPdf(publicIds, stream) {
+function renderCardsPdf(publicIds, stream, qrTextFor = (id) => id) {
   const s = getSettings();
   const doc = new PDFDocument({ autoFirstPage: false, size: 'A4', margin: 0, info: { Title: 'بطاقات المشاركين', Producer: 'Fajr Campaign' } });
   doc.pipe(stream);
@@ -167,7 +167,7 @@ function renderCardsPdf(publicIds, stream) {
   const gridH = ROWS * CARD_H + (ROWS - 1) * GAP_Y;
   const x0 = (PAGE_W - gridW) / 2;
   const y0 = (PAGE_H - gridH) / 2 - 4;
-  const ctx = { logo, mosque: s.mosque_name, campaign: s.campaign_name };
+  const ctx = { logo, mosque: s.mosque_name, campaign: s.campaign_name, qrTextFor };
 
   for (let i = 0; i < publicIds.length; i++) {
     const slot = i % perPage;

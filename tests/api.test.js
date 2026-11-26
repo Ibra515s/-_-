@@ -342,3 +342,27 @@ test('15) الشعار: يقبل PNG/JPG فقط', async () => {
   const pdf = await admin.req('POST', '/api/admin/cards/pdf', { scope: 'ids', ids: [1, 2, 3] });
   assert.equal(pdf.status, 200, 'PDF مع شعار');
 });
+
+test('16) QR يحمل رابط الموقع + المعرف: التوجيه والمسح يلتقطان المعرف', async () => {
+  const { normalizeCode } = require('../server/util');
+  const id = ids[400];
+  assert.equal(normalizeCode(id), id);
+  assert.equal(normalizeCode(`https://example.com/c/${id}`), id);
+  assert.equal(normalizeCode(`https://example.com/c/${id.toLowerCase()}`), id);
+  assert.equal(normalizeCode(`https://example.com/#/c/${id}`), id);
+  assert.equal(normalizeCode(`http://localhost:3000/c/${id}?x=1`), id);
+  assert.equal(normalizeCode('https://example.com/c/hello-world'), null);
+
+  const red = await new Client().req('GET', `/c/${id.toLowerCase()}`);
+  assert.equal(red.status, 302);
+  assert.equal(red.headers.get('location'), `/#/c/${id}`);
+
+  const scan = await assistant.post('/api/scan', { code: `https://example.com/c/${id}`, method: 'qr' });
+  assert.equal(scan.data.status, 'pending', 'الماسح يلتقط المعرف من الرابط');
+  const look = await new Client().post('/api/auth/lookup', { code: `https://example.com/c/${id}` });
+  assert.equal(look.data.state, 'pending');
+  assert.equal(look.data.public_id, id);
+
+  const svg = await (await admin.req('GET', `/api/admin/qr/${id}.svg`)).text();
+  assert.ok(svg.includes('<svg'));
+});
