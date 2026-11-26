@@ -14,14 +14,26 @@ function loadJsQR() {
   return jsQRPromise;
 }
 
-export function cameraErrorMessage(e) {
+export async function cameraPermissionState() {
+  try {
+    const st = await navigator.permissions?.query({ name: 'camera' });
+    return st?.state || 'unknown'; // 'granted' | 'prompt' | 'denied' | 'unknown'
+  } catch {
+    return 'unknown';
+  }
+}
+
+export function cameraErrorMessage(e, permState = 'unknown') {
   if (!window.isSecureContext || !navigator.mediaDevices?.getUserMedia) return 'تشغيل الكاميرا يتطلب اتصالًا آمنًا (HTTPS).';
   switch (e?.name) {
     case 'NotAllowedError': case 'SecurityError':
-      return 'الكاميرا متوقفة من إعدادات المتصفح. لتفعيلها: افتح متصفح Chrome ← القائمة (⋮) ← الإعدادات ← إعدادات المواقع الإلكترونية ← الكاميرا ← اسمح للموقع.';
+      if (permState === 'denied') {
+        return 'المتصفح يمنع ظهور نافذة الإذن لأنها رُفضت سابقًا. لإعادة إظهارها: اضغط أيقونة القفل/الضبط بجانب رابط الموقع في أعلى المتصفح ← الأذونات ← تفعيل الكاميرا (أو إعادة الضبط).';
+      }
+      return 'اضغط زر «طلب إذن الكاميرا وتشغيلها» أدناه ثم اختر «سماح» من النافذة التي ستظهر.';
     case 'NotFoundError': case 'OverconstrainedError': return 'لم يتم العثور على كاميرا متوافقة في هذا الجهاز.';
     case 'NotReadableError': return 'الكاميرا مستخدمة حاليًا. أغلق أي تطبيق آخر يستخدمها ثم اضغط تشغيل الكاميرا.';
-    default: return 'تعذّر تشغيل الكاميرا. اضغط «تشغيل الكاميرا» لإعادة المحاولة.';
+    default: return 'تعذّر تشغيل الكاميرا. اضغط زر التشغيل لإعادة المحاولة.';
   }
 }
 
@@ -54,11 +66,7 @@ export class QrScanner {
     // تنظيف أي مسار سابق عالق قبل فتح الكاميرا من جديد
     this.stop();
 
-    // التأكد من ارتباط عنصر الفيديو بـ DOM قبل التشغيل لتفادي رفض التشغيل التلقائي على الجوال
-    if (!this.video.isConnected) {
-      await new Promise((r) => requestAnimationFrame(() => requestAnimationFrame(r)));
-    }
-
+    // طلب إذن الكاميرا فوراً وبشكل متزامن مع ضغطة المستخدم لضمان ظهور نافذة الإذن في الجوال
     const tries = [
       { video: { facingMode: { ideal: 'environment' }, width: { ideal: 1280 }, height: { ideal: 720 } }, audio: false },
       { video: { facingMode: 'environment' }, audio: false },
@@ -77,6 +85,9 @@ export class QrScanner {
     if (!this.stream) throw lastErr || new Error('camera_failed');
 
     try {
+      if (!this.video.isConnected) {
+        await new Promise((r) => requestAnimationFrame(() => requestAnimationFrame(r)));
+      }
       this.video.muted = true;
       this.video.defaultMuted = true;
       this.video.playsInline = true;

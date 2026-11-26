@@ -1,6 +1,6 @@
 import { h, icon, beep, fmtTime } from '../dom.js';
 import * as api from '../api.js';
-import { QrScanner, cameraErrorMessage } from '../scanner.js';
+import { QrScanner, cameraErrorMessage, cameraPermissionState } from '../scanner.js';
 
 const num = (n) => new Intl.NumberFormat('en-US').format(n);
 
@@ -43,7 +43,8 @@ export default async function view({ state }) {
   function drawSound() { soundBtn.replaceChildren(icon(sound ? 'volume' : 'mute'), sound ? ' الصوت' : ' صامت'); }
   drawSound();
 
-  const offPanel = h('div', { class: 'off hidden' }, h('div', { class: 'msg' }, 'الكاميرا متوقفة'), h('button', { class: 'btn btn-primary', onclick: () => startCamera() }, icon('camera'), 'تشغيل الكاميرا'));
+  const startBtn = h('button', { class: 'btn btn-primary btn-lg', onclick: () => startCamera() }, icon('camera'), 'طلب إذن الكاميرا وتشغيلها');
+  const offPanel = h('div', { class: 'off hidden' }, h('div', { class: 'msg' }, 'الكاميرا متوقفة'), startBtn);
   const cam = h('div', { class: 'cam' }, video, h('div', { class: 'frame' }), offPanel, h('div', { class: 'tools' }, h('div', { class: 'row', style: { gap: '6px' } }, toggleBtn, torchBtn), soundBtn));
 
   function setCamState(cls) { cam.classList.remove('ok', 'dup', 'err'); if (cls) cam.classList.add(cls); }
@@ -59,7 +60,9 @@ export default async function view({ state }) {
       try { wakeLock = await navigator.wakeLock?.request('screen'); } catch { /* غير مدعوم */ }
     } catch (e) {
       scanner = null;
-      offPanel.querySelector('.msg').textContent = cameraErrorMessage(e);
+      const perm = await cameraPermissionState();
+      offPanel.querySelector('.msg').textContent = cameraErrorMessage(e, perm);
+      startBtn.replaceChildren(icon('camera'), perm === 'denied' ? 'إعادة المحاولة بعد تفعيل الإذن' : 'طلب إذن الكاميرا وتشغيلها');
       offPanel.classList.remove('hidden');
     }
   }
@@ -144,7 +147,18 @@ export default async function view({ state }) {
 
   refreshLive();
   pollTimer = setInterval(() => { if (document.visibilityState === 'visible') refreshLive(); }, 5000);
-  setTimeout(() => startCamera(), 0);
+  cameraPermissionState().then((perm) => {
+    if (perm === 'granted') {
+      startCamera();
+    } else {
+      toggleBtn.replaceChildren(icon('camera'), ' تشغيل');
+      offPanel.querySelector('.msg').textContent = perm === 'denied'
+        ? 'المتصفح يمنع نافذة الإذن لأنها رُفضت سابقًا. اضغط أيقونة القفل/الضبط بجانب الرابط في أعلى المتصفح لتفعيل الكاميرا ثم اضغط الزر أدناه.'
+        : 'اضغط الزر أدناه لطلب إذن الكاميرا وبدء المسح مباشرة';
+      startBtn.replaceChildren(icon('camera'), 'طلب إذن الكاميرا وتشغيلها');
+      offPanel.classList.remove('hidden');
+    }
+  });
 
   return {
     el,

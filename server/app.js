@@ -37,7 +37,7 @@ function createApp() {
       'X-Content-Type-Options': 'nosniff',
       'X-Frame-Options': 'DENY',
       'Referrer-Policy': 'same-origin',
-      'Permissions-Policy': 'camera=(self), microphone=(), geolocation=()',
+      'Permissions-Policy': 'camera=*, microphone=(), geolocation=()',
     });
     if (req.secure) res.set('Strict-Transport-Security', 'max-age=31536000');
     next();
