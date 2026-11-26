@@ -1,6 +1,6 @@
 import { h, icon, field, toast, errorBox } from '../dom.js';
 import * as api from '../api.js';
-import { QrScanner, cameraErrorMessage, photoButton } from '../scanner.js';
+import { QrScanner, cameraErrorMessage } from '../scanner.js';
 import { state, navigate, refreshMe, homeFor, logoMark } from '../app.js';
 
 function authShell(...children) {
@@ -69,19 +69,13 @@ export async function loginView() {
     camBox.replaceChildren(
       h('div', { class: 'cam' }, video, h('div', { class: 'frame' })),
       h('p', { class: 'muted small center', style: { margin: 0 } }, 'وجّه الكاميرا نحو رمز QR على البطاقة'),
-      photoButton(onScannedCode, showError),
       h('button', { type: 'button', class: 'btn btn-block', onclick: stopScan }, 'إلغاء'));
     camBox.classList.remove('hidden');
     scanner = new QrScanner(video, async (code) => {
       scanner.paused = true;
       await onScannedCode(code);
     });
-    try { await scanner.start(); } catch (e) {
-      scanner?.stop(); scanner = null;
-      camBox.replaceChildren(
-        errorBox(cameraErrorMessage(e)),
-        photoButton(onScannedCode, showError, 'التقاط صورة للبطاقة بالكاميرا'));
-    }
+    try { await scanner.start(); } catch (e) { stopScan(); showError(cameraErrorMessage(e)); }
   }
 
   const submit = submitButton('دخول');
@@ -142,19 +136,13 @@ export async function activateView() {
     const video = h('video', { autoplay: true, playsinline: true, muted: true });
     camBox.replaceChildren(
       h('div', { class: 'cam' }, video, h('div', { class: 'frame' })),
-      photoButton(onActivateCode, (m) => errBox.replaceChildren(errorBox(m))),
       h('button', { type: 'button', class: 'btn btn-block', onclick: stopScan }, 'إلغاء'));
     camBox.classList.remove('hidden');
     scanner = new QrScanner(video, async (code) => {
       scanner.paused = true;
       await onActivateCode(code);
     });
-    try { await scanner.start(); } catch (e) {
-      scanner?.stop(); scanner = null;
-      camBox.replaceChildren(
-        errorBox(cameraErrorMessage(e)),
-        photoButton(onActivateCode, (m) => errBox.replaceChildren(errorBox(m)), 'التقاط صورة للبطاقة بالكاميرا'));
-    }
+    try { await scanner.start(); } catch (e) { stopScan(); errBox.replaceChildren(errorBox(cameraErrorMessage(e))); }
   }
 
   const form = h('form', { class: 'stack', novalidate: true },
