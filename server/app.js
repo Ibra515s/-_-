@@ -33,11 +33,11 @@ function createApp() {
   // ---------- ترويسات الأمان ----------
   app.use((req, res, next) => {
     res.set({
-      'Content-Security-Policy': "default-src 'self'; script-src 'self'; style-src 'self' 'unsafe-inline'; img-src 'self' data: blob:; font-src 'self'; connect-src 'self'; media-src 'self' data: blob: mediastream:; worker-src 'self'; manifest-src 'self'; frame-ancestors 'none'; base-uri 'none'; form-action 'self'",
+      'Content-Security-Policy': "default-src 'self'; script-src 'self'; style-src 'self' 'unsafe-inline'; img-src 'self' data: blob:; font-src 'self'; connect-src 'self'; media-src 'self' data:; worker-src 'self'; manifest-src 'self'; frame-ancestors 'none'; base-uri 'none'; form-action 'self'",
       'X-Content-Type-Options': 'nosniff',
       'X-Frame-Options': 'DENY',
       'Referrer-Policy': 'same-origin',
-      'Permissions-Policy': 'camera=*, microphone=(), geolocation=()',
+      'Permissions-Policy': 'camera=(self), microphone=(), geolocation=()',
     });
     if (req.secure) res.set('Strict-Transport-Security', 'max-age=31536000');
     next();

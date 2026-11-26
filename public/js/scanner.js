@@ -14,26 +14,13 @@ function loadJsQR() {
   return jsQRPromise;
 }
 
-export async function cameraPermissionState() {
-  try {
-    const st = await navigator.permissions?.query({ name: 'camera' });
-    return st?.state || 'unknown'; // 'granted' | 'prompt' | 'denied' | 'unknown'
-  } catch {
-    return 'unknown';
-  }
-}
-
-export function cameraErrorMessage(e, permState = 'unknown') {
+export function cameraErrorMessage(e) {
   if (!window.isSecureContext || !navigator.mediaDevices?.getUserMedia) return 'تشغيل الكاميرا يتطلب اتصالًا آمنًا (HTTPS).';
   switch (e?.name) {
-    case 'NotAllowedError': case 'SecurityError':
-      if (permState === 'denied') {
-        return 'المتصفح يمنع ظهور نافذة الإذن لأنها رُفضت سابقًا. لإعادة إظهارها: اضغط أيقونة القفل/الضبط بجانب رابط الموقع في أعلى المتصفح ← الأذونات ← تفعيل الكاميرا (أو إعادة الضبط).';
-      }
-      return 'اضغط زر «طلب إذن الكاميرا وتشغيلها» أدناه ثم اختر «سماح» من النافذة التي ستظهر.';
-    case 'NotFoundError': case 'OverconstrainedError': return 'لم يتم العثور على كاميرا متوافقة في هذا الجهاز.';
-    case 'NotReadableError': return 'الكاميرا مستخدمة حاليًا. أغلق أي تطبيق آخر يستخدمها ثم اضغط تشغيل الكاميرا.';
-    default: return 'تعذّر تشغيل الكاميرا. اضغط زر التشغيل لإعادة المحاولة.';
+    case 'NotAllowedError': case 'SecurityError': return 'لم يُسمح باستخدام الكاميرا. اسمح بها من إعدادات المتصفح ثم أعد المحاولة.';
+    case 'NotFoundError': case 'OverconstrainedError': return 'لم يتم العثور على كاميرا في هذا الجهاز.';
+    case 'NotReadableError': return 'الكاميرا مستخدمة من تطبيق آخر. أغلقه وأعد المحاولة.';
+    default: return 'تعذّر تشغيل الكاميرا.';
   }
 }
 
@@ -62,68 +49,28 @@ export class QrScanner {
   async start() {
     if (this.running) return;
     if (!window.isSecureContext || !navigator.mediaDevices?.getUserMedia) throw Object.assign(new Error('insecure'), { name: 'SecurityError' });
+    this.stream = await navigator.mediaDevices.getUserMedia({
+      video: { facingMode: { ideal: 'environment' }, width: { ideal: 1280 }, height: { ideal: 720 } },
+      audio: false,
+    });
+    this.video.setAttribute('playsinline', '');
+    this.video.muted = true;
+    this.video.srcObject = this.stream;
+    await this.video.play();
+    this.running = true;
 
-    // تنظيف أي مسار سابق عالق قبل فتح الكاميرا من جديد
-    this.stop();
-
-    // طلب إذن الكاميرا فوراً وبشكل متزامن مع ضغطة المستخدم لضمان ظهور نافذة الإذن في الجوال
-    const tries = [
-      { video: { facingMode: { ideal: 'environment' }, width: { ideal: 1280 }, height: { ideal: 720 } }, audio: false },
-      { video: { facingMode: 'environment' }, audio: false },
-      { video: true, audio: false },
-    ];
-    let lastErr;
-    for (const c of tries) {
+    if ('BarcodeDetector' in window) {
       try {
-        this.stream = await navigator.mediaDevices.getUserMedia(c);
-        break;
-      } catch (e) {
-        lastErr = e;
-        if (e?.name === 'NotAllowedError' || e?.name === 'SecurityError') throw e;
-      }
+        const fmts = await window.BarcodeDetector.getSupportedFormats();
+        if (fmts.includes('qr_code')) this.detector = new window.BarcodeDetector({ formats: ['qr_code'] });
+      } catch { /* نستخدم jsQR */ }
     }
-    if (!this.stream) throw lastErr || new Error('camera_failed');
+    if (!this.detector) await loadJsQR();
 
-    try {
-      if (!this.video.isConnected) {
-        await new Promise((r) => requestAnimationFrame(() => requestAnimationFrame(r)));
-      }
-      this.video.muted = true;
-      this.video.defaultMuted = true;
-      this.video.playsInline = true;
-      this.video.setAttribute('playsinline', '');
-      this.video.setAttribute('webkit-playsinline', '');
-      this.video.setAttribute('autoplay', '');
-      this.video.srcObject = this.stream;
-      try {
-        await this.video.play();
-      } catch {
-        // انتظار تحميل بيانات الفيديو ثم المحاولة مجدداً
-        await new Promise((res) => {
-          const done = () => { this.video.removeEventListener('loadedmetadata', done); res(); };
-          this.video.addEventListener('loadedmetadata', done, { once: true });
-          setTimeout(done, 400);
-        });
-        await this.video.play().catch(() => {});
-      }
-      this.running = true;
-
-      if ('BarcodeDetector' in window) {
-        try {
-          const fmts = await window.BarcodeDetector.getSupportedFormats();
-          if (fmts.includes('qr_code')) this.detector = new window.BarcodeDetector({ formats: ['qr_code'] });
-        } catch { /* نستخدم jsQR */ }
-      }
-      if (!this.detector) await loadJsQR();
-
-      const track = this.stream.getVideoTracks()[0];
-      const caps = track?.getCapabilities?.() || {};
-      this.onTorchSupport?.(!!caps.torch);
-      this._loop();
-    } catch (e) {
-      this.stop();
-      throw e;
-    }
+    const track = this.stream.getVideoTracks()[0];
+    const caps = track?.getCapabilities?.() || {};
+    this.onTorchSupport?.(!!caps.torch);
+    this._loop();
   }
 
   stop() {
@@ -131,7 +78,7 @@ export class QrScanner {
     this.torchOn = false;
     this.stream?.getTracks().forEach((t) => t.stop());
     this.stream = null;
-    if (this.video) this.video.srcObject = null;
+    this.video.srcObject = null;
   }
 
   async toggleTorch() {

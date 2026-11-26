@@ -50,19 +50,6 @@ export async function loginView() {
   if (state.loginCode) { idInput.value = state.loginCode; state.loginCode = null; setTimeout(() => { pw.input.focus(); toast('تمت قراءة البطاقة. أدخل كلمة المرور.', 'ok'); }, 0); }
   if (state.flash) { showError(state.flash); state.flash = null; }
 
-  async function onScannedCode(code) {
-    try {
-      const r = await api.post('/auth/lookup', { code });
-      if (r.state === 'active') {
-        idInput.value = r.public_id; stopScan(); toast('تمت قراءة البطاقة. أدخل كلمة المرور.', 'ok'); pw.input.focus();
-      } else if (r.state === 'pending') {
-        state.pendingCode = r.public_id; stopScan(); navigate('#/activate');
-      } else {
-        stopScan(); showError(r.state === 'suspended' ? 'هذا الحساب موقوف. راجع المشرف.' : r.message);
-      }
-    } catch (e) { stopScan(); showError(e.message); }
-  }
-
   async function startScan() {
     showError('');
     const video = h('video', { autoplay: true, playsinline: true, muted: true });
@@ -73,7 +60,16 @@ export async function loginView() {
     camBox.classList.remove('hidden');
     scanner = new QrScanner(video, async (code) => {
       scanner.paused = true;
-      await onScannedCode(code);
+      try {
+        const r = await api.post('/auth/lookup', { code });
+        if (r.state === 'active') {
+          idInput.value = r.public_id; stopScan(); toast('تمت قراءة البطاقة. أدخل كلمة المرور.', 'ok'); pw.input.focus();
+        } else if (r.state === 'pending') {
+          state.pendingCode = r.public_id; stopScan(); navigate('#/activate');
+        } else {
+          stopScan(); showError(r.state === 'suspended' ? 'هذا الحساب موقوف. راجع المشرف.' : r.message);
+        }
+      } catch (e) { stopScan(); showError(e.message); }
     });
     try { await scanner.start(); } catch (e) { stopScan(); showError(cameraErrorMessage(e)); }
   }
@@ -122,25 +118,19 @@ export async function activateView() {
   const camBox = h('div', { class: 'hidden stack-sm' });
   const stopScan = () => { scanner?.stop(); scanner = null; camBox.classList.add('hidden'); camBox.replaceChildren(); };
 
-  async function onActivateCode(code) {
-    try {
-      const r = await api.post('/auth/lookup', { code });
-      stopScan();
-      if (r.state === 'pending') { idInput.value = r.public_id; toast('تمت قراءة البطاقة.', 'ok'); }
-      else if (r.state === 'active') { toast('هذا الحساب مفعّل مسبقًا. سجّل الدخول.'); navigate('#/login'); }
-      else errBox.replaceChildren(errorBox(r.message || 'هذا الحساب موقوف.'));
-    } catch (e) { stopScan(); errBox.replaceChildren(errorBox(e.message)); }
-  }
-
   async function scanCard() {
     const video = h('video', { autoplay: true, playsinline: true, muted: true });
-    camBox.replaceChildren(
-      h('div', { class: 'cam' }, video, h('div', { class: 'frame' })),
-      h('button', { type: 'button', class: 'btn btn-block', onclick: stopScan }, 'إلغاء'));
+    camBox.replaceChildren(h('div', { class: 'cam' }, video, h('div', { class: 'frame' })), h('button', { type: 'button', class: 'btn btn-block', onclick: stopScan }, 'إلغاء'));
     camBox.classList.remove('hidden');
     scanner = new QrScanner(video, async (code) => {
       scanner.paused = true;
-      await onActivateCode(code);
+      try {
+        const r = await api.post('/auth/lookup', { code });
+        stopScan();
+        if (r.state === 'pending') { idInput.value = r.public_id; toast('تمت قراءة البطاقة.', 'ok'); }
+        else if (r.state === 'active') { toast('هذا الحساب مفعّل مسبقًا. سجّل الدخول.'); navigate('#/login'); }
+        else errBox.replaceChildren(errorBox(r.message || 'هذا الحساب موقوف.'));
+      } catch (e) { stopScan(); errBox.replaceChildren(errorBox(e.message)); }
     });
     try { await scanner.start(); } catch (e) { stopScan(); errBox.replaceChildren(errorBox(cameraErrorMessage(e))); }
   }
