@@ -1,5 +1,5 @@
 // عامل خدمة بسيط: يخزّن ملفات الواجهة الثابتة فقط (لا يخزّن أي طلبات API أو بيانات).
-const CACHE = 'fajr-shell-v1';
+const CACHE = 'fajr-shell-v2';
 const SHELL = ['/', '/css/app.css', '/js/app.js', '/js/api.js', '/js/dom.js', '/js/scanner.js', '/icons/icon-192.png'];
 
 self.addEventListener('install', (e) => {

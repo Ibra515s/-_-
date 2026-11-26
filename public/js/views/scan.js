@@ -1,6 +1,6 @@
 import { h, icon, beep, fmtTime } from '../dom.js';
 import * as api from '../api.js';
-import { QrScanner, cameraErrorMessage } from '../scanner.js';
+import { QrScanner, cameraErrorMessage, photoButton } from '../scanner.js';
 
 const num = (n) => new Intl.NumberFormat('en-US').format(n);
 
@@ -140,7 +140,9 @@ export default async function view({ state }) {
       h('div', { class: 'stat accent' }, vPresent, h('div', { class: 'l' }, 'الحاضرون اليوم')),
       h('div', { class: 'stat' }, vExpected, h('div', { class: 'l' }, 'المتوقع')),
       h('div', { class: 'stat' }, vMine, h('div', { class: 'l' }, 'سجّلتَهم أنت'))),
-    cam, result, manual, recentBox);
+    cam,
+    photoButton((code) => handle(code, 'qr'), (msg) => showResult({ status: 'invalid', message: msg })),
+    result, manual, recentBox);
 
   refreshLive();
   pollTimer = setInterval(() => { if (document.visibilityState === 'visible') refreshLive(); }, 5000);
