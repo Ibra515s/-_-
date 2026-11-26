@@ -145,7 +145,7 @@ export function debounce(fn, ms = 300) {
 }
 
 // ---------- تنسيق التواريخ (أرقام لاتينية بتوقيت إعدادات المسجد) ----------
-let TZ = 'Asia/Riyadh';
+let TZ = 'Asia/Amman';
 export const setTimezone = (tz) => { TZ = tz; };
 export function fmtTime(iso) {
   if (!iso) return '—';

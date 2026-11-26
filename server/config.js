@@ -18,7 +18,7 @@ module.exports = {
   MONGODB_DB: process.env.MONGODB_DB || 'fajr',
   // اضبطه على 1 عند التشغيل خلف وسيط عكسي (أغلب الاستضافات)
   TRUST_PROXY: process.env.TRUST_PROXY || '',
-  DEFAULT_TZ: process.env.APP_TIMEZONE || 'Asia/Riyadh',
+  DEFAULT_TZ: process.env.APP_TIMEZONE || 'Asia/Amman',
   PARTICIPANT_SESSION_DAYS: 120,
   STAFF_SESSION_DAYS: 14,
 };
