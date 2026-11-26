@@ -7,16 +7,98 @@ const { getSettings, getLogoBuffer } = require('../db');
 const MM = 72 / 25.4;
 const mm = (v) => v * MM;
 
-// مقاس CR80 أفقيًا
+// المقاس الافتراضي للبطاقة (CR80 أفقياً)
 const CARD_W = 85.6, CARD_H = 54;
-const COLS = 2, ROWS = 3;
-const GAP_X = 12, GAP_Y = 16;
-const PAGE_W = 210, PAGE_H = 297;
+
+const PAPERS = {
+  A4: [210, 297],
+  A3: [297, 420],
+  SRA3: [320, 450],
+  A2: [420, 594],
+  B2: [500, 700],
+  B1: [700, 1000],
+  LETTER: [215.9, 279.4],
+};
+
+const CARD_SIZES = {
+  cr80: [85.6, 54],
+  biz: [90, 55],
+  medium: [75, 48],
+  compact: [65, 42],
+};
+
+const SPACING_PRESETS = {
+  tight: { gapX: 2, gapY: 2, margin: 5, footer: false },
+  ultra_tight: { gapX: 1, gapY: 1, margin: 4, footer: false },
+  touching: { gapX: 0, gapY: 0, margin: 4, footer: false },
+  classic: { gapX: 12, gapY: 16, margin: 10, footer: true },
+};
 
 const INK = '#1a2b26';
 const MUTED = '#5b6b66';
 const BRAND = '#0f6b4f';
 const ARABIC_RE = /([؀-ۿ]+)/;
+
+function clampNum(v, fallback, min, max) {
+  const n = Number(v);
+  if (!Number.isFinite(n)) return fallback;
+  return Math.min(max, Math.max(min, n));
+}
+
+function resolveLayout(opts = {}) {
+  const isDefaultClassic = !opts || (!opts.paper && !opts.spacing && !opts.card_size && !opts.orientation);
+  if (isDefaultClassic) {
+    return {
+      pageW: 210, pageH: 297, cardW: CARD_W, cardH: CARD_H,
+      cols: 2, rows: 3, gapX: 12, gapY: 16, margin: 10,
+      footer: true, corners: 'rounded',
+    };
+  }
+
+  let [baseW, baseH] = PAPERS[opts.paper] || PAPERS.A4;
+  if (opts.paper === 'CUSTOM') {
+    baseW = clampNum(opts.page_w, 297, 100, 2000);
+    baseH = clampNum(opts.page_h, 420, 100, 2000);
+  }
+  const minSide = Math.min(baseW, baseH);
+  const maxSide = Math.max(baseW, baseH);
+
+  let [cardW, cardH] = CARD_SIZES[opts.card_size] || CARD_SIZES.cr80;
+  if (opts.card_size === 'custom') {
+    cardW = clampNum(opts.card_w, CARD_W, 35, 250);
+    cardH = clampNum(opts.card_h, CARD_H, 25, 200);
+  }
+
+  const sp = SPACING_PRESETS[opts.spacing] || SPACING_PRESETS.tight;
+  const gapX = opts.spacing === 'custom' ? clampNum(opts.gap_x, 2, 0, 50) : sp.gapX;
+  const gapY = opts.spacing === 'custom' ? clampNum(opts.gap_y, 2, 0, 50) : sp.gapY;
+  const margin = opts.spacing === 'custom' ? clampNum(opts.margin, 5, 0, 50) : sp.margin;
+  const footer = opts.footer !== undefined ? !!opts.footer : sp.footer;
+  const corners = opts.corners === 'sharp' ? 'sharp' : 'rounded';
+  const footerReserve = footer ? 12 : 0;
+
+  const fitFor = (pw, ph) => {
+    const availW = Math.max(cardW, pw - margin * 2);
+    const availH = Math.max(cardH, ph - margin * 2 - footerReserve);
+    const cols = Math.max(1, Math.floor((availW + gapX + 0.01) / (cardW + gapX)));
+    const rows = Math.max(1, Math.floor((availH + gapY + 0.01) / (cardH + gapY)));
+    return { pw, ph, cols, rows, total: cols * rows };
+  };
+
+  const portrait = fitFor(minSide, maxSide);
+  const landscape = fitFor(maxSide, minSide);
+  let chosen;
+  if (opts.orientation === 'portrait') chosen = portrait;
+  else if (opts.orientation === 'landscape') chosen = landscape;
+  else chosen = landscape.total > portrait.total ? landscape : portrait;
+
+  return {
+    pageW: chosen.pw, pageH: chosen.ph,
+    cardW, cardH,
+    cols: chosen.cols, rows: chosen.rows,
+    gapX, gapY, margin, footer, corners,
+  };
+}
 
 function registerFonts(doc) {
   doc.registerFont('ar', path.join(FONT_DIR, 'tajawal-arabic-400-normal.woff'));
@@ -40,8 +122,8 @@ function runWidth(doc, runs, size, bold) {
  * يرسم نصًا مختلط الاتجاه. اتجاه الفقرة الأساسي RTL (المقطع الأول منطقيًا في أقصى اليمين)
  * أو LTR حسب opts.rtl. المحاذاة: right | left | center داخل المربع [x, x+width].
  */
-function drawText(doc, text, x, y, width, { size = 10, bold = false, color = INK, rtl = true, align = 'right', minSize = 6 } = {}) {
-  let runs = splitRuns(text);
+function drawText(doc, text, x, y, width, { size = 10, bold = false, color = INK, rtl = true, align = 'right', minSize = 5 } = {}) {
+  const runs = splitRuns(text);
   let s = size;
   while (s > minSize && runWidth(doc, runs, s, bold) > width) s -= 0.25;
   const total = runWidth(doc, runs, s, bold);
@@ -50,8 +132,7 @@ function drawText(doc, text, x, y, width, { size = 10, bold = false, color = INK
   else if (align === 'right') cursor = rtl ? x + width : x + width - total;
   else cursor = rtl ? x + total : x;
   doc.fillColor(color);
-  const ordered = rtl ? runs : runs;
-  for (const r of ordered) {
+  for (const r of runs) {
     const f = (r.arabic ? 'ar' : 'la') + (bold ? '-b' : '');
     doc.font(f).fontSize(s);
     const w = doc.widthOfString(r.text);
@@ -75,7 +156,6 @@ function drawQr(doc, text, x, y, size) {
       if (data[r * n + c]) {
         let end = c;
         while (end + 1 < n && data[r * n + end + 1]) end++;
-        // نمدّ المستطيل قليلًا لتفادي فواصل شعرية بين المربعات في بعض العارضات
         doc.rect(x + (quiet + c) * unit, y + (quiet + r) * unit, (end - c + 1) * unit + 0.02, unit + 0.02).fill();
         c = end + 1;
       } else c++;
@@ -83,106 +163,183 @@ function drawQr(doc, text, x, y, size) {
   }
 }
 
-function drawCropMarks(doc, x, y, w, h) {
-  const off = mm(1.8), len = mm(3.5);
-  doc.lineWidth(0.25).strokeColor('#000000');
-  const corners = [[x, y, -1, -1], [x + w, y, 1, -1], [x, y + h, -1, 1], [x + w, y + h, 1, 1]];
-  for (const [cx, cy, sx, sy] of corners) {
-    doc.moveTo(cx + sx * off, cy).lineTo(cx + sx * (off + len), cy).stroke();
-    doc.moveTo(cx, cy + sy * off).lineTo(cx, cy + sy * (off + len)).stroke();
+/** علامات قص ذكية: لا تتداخل مع البطاقات المجاورة عندما يكون الهامش صغيراً */
+function drawCropMarks(doc, x, y, w, h, layout) {
+  if (layout.gapX >= 8 && layout.gapY >= 8) {
+    const off = mm(1.8), len = mm(3.5);
+    doc.lineWidth(0.25).strokeColor('#000000');
+    const corners = [[x, y, -1, -1], [x + w, y, 1, -1], [x, y + h, -1, 1], [x + w, y + h, 1, 1]];
+    for (const [cx, cy, sx, sy] of corners) {
+      doc.moveTo(cx + sx * off, cy).lineTo(cx + sx * (off + len), cy).stroke();
+      doc.moveTo(cx, cy + sy * off).lineTo(cx, cy + sy * (off + len)).stroke();
+    }
+    return;
   }
+  // في الهوامش الصغيرة: علامات زاوية دقيقة داخل حدود البطاقة/الفجوة دون المساس بالبطاقة المجاورة
+  const len = mm(2.2);
+  doc.save().lineWidth(0.3).strokeColor('#555555');
+  const corners = [[x, y, 1, 1], [x + w, y, -1, 1], [x, y + h, 1, -1], [x + w, y + h, -1, -1]];
+  for (const [cx, cy, sx, sy] of corners) {
+    doc.moveTo(cx, cy).lineTo(cx + sx * len, cy).stroke();
+    doc.moveTo(cx, cy).lineTo(cx, cy + sy * len).stroke();
+  }
+  doc.restore();
 }
 
-function drawCard(doc, publicId, ox, oy, ctx) {
-  const W = mm(CARD_W), H = mm(CARD_H);
-  const pad = mm(4);
+/** علامات قص خارجية حول أطراف الشبكة في هامش الورقة لتسهيل القص بالمسطرة أو مقصلة المطبعة */
+function drawSheetGridMarks(doc, x0Mm, y0Mm, layout) {
+  const { cols, rows, cardW, cardH, gapX, gapY, margin } = layout;
+  if (margin < 2) return;
+  const gridW = cols * cardW + (cols - 1) * gapX;
+  const gridH = rows * cardH + (rows - 1) * gapY;
+  const tickLen = mm(Math.min(3.5, Math.max(1.5, margin - 1)));
+  const off = mm(0.8);
+  doc.save().lineWidth(0.35).strokeColor('#000000');
+
+  // خطوط القص العمودية (أعلى وأسفل الشبكة)
+  const xCuts = new Set();
+  for (let c = 0; c < cols; c++) {
+    const left = x0Mm + c * (cardW + gapX);
+    const right = left + cardW;
+    xCuts.add(left.toFixed(2));
+    xCuts.add(right.toFixed(2));
+  }
+  const topY = mm(y0Mm);
+  const botY = mm(y0Mm + gridH);
+  for (const xs of xCuts) {
+    const x = mm(Number(xs));
+    doc.moveTo(x, topY - off).lineTo(x, topY - off - tickLen).stroke();
+    doc.moveTo(x, botY + off).lineTo(x, botY + off + tickLen).stroke();
+  }
+
+  // خطوط القص الأفقية (يمين ويسار الشبكة)
+  const yCuts = new Set();
+  for (let r = 0; r < rows; r++) {
+    const top = y0Mm + r * (cardH + gapY);
+    const bot = top + cardH;
+    yCuts.add(top.toFixed(2));
+    yCuts.add(bot.toFixed(2));
+  }
+  const leftX = mm(x0Mm);
+  const rightX = mm(x0Mm + gridW);
+  for (const ys of yCuts) {
+    const y = mm(Number(ys));
+    doc.moveTo(leftX - off, y).lineTo(leftX - off - tickLen, y).stroke();
+    doc.moveTo(rightX + off, y).lineTo(rightX + off + tickLen, y).stroke();
+  }
+  doc.restore();
+}
+
+function drawCard(doc, publicId, ox, oy, ctx, layout) {
+  const cardW = layout?.cardW || CARD_W;
+  const cardH = layout?.cardH || CARD_H;
+  const k = Math.min(cardW / CARD_W, cardH / CARD_H);
+  const W = mm(cardW), H = mm(cardH);
+  const pad = mm(4 * k);
+  const radius = layout?.corners === 'sharp' ? 0 : mm(3 * k);
 
   doc.save();
-  doc.roundedRect(ox, oy, W, H, mm(3)).lineWidth(0.5).fillAndStroke('#ffffff', '#c9d3cf');
+  if (radius > 0) {
+    doc.roundedRect(ox, oy, W, H, radius).lineWidth(0.5).fillAndStroke('#ffffff', '#c9d3cf');
+    doc.save().roundedRect(ox, oy, W, H, radius).clip();
+  } else {
+    doc.rect(ox, oy, W, H).lineWidth(0.4).fillAndStroke('#ffffff', '#c0ccc7');
+    doc.save().rect(ox, oy, W, H).clip();
+  }
   // شريط علوي رفيع بلون الحملة
-  doc.save().roundedRect(ox, oy, W, H, mm(3)).clip();
-  doc.rect(ox, oy, W, mm(1.6)).fill(BRAND);
+  doc.rect(ox, oy, W, mm(1.6 * k)).fill(BRAND);
   doc.restore();
 
-  // QR على اليسار
-  const qrSize = mm(33);
-  const qrX = ox + pad - mm(1);
-  const qrY = oy + (H - qrSize) / 2 + mm(0.8);
+  // QR على اليسار (مربع دائماً)
+  const qrSize = mm(33 * k);
+  const qrX = ox + pad - mm(1 * k);
+  const qrY = oy + (H - qrSize) / 2 + mm(0.8 * k);
   drawQr(doc, ctx.qrTextFor ? ctx.qrTextFor(publicId) : publicId, qrX, qrY, qrSize);
 
   // المنطقة اليمنى
-  const rx0 = qrX + qrSize + mm(1.5);
+  const rx0 = qrX + qrSize + mm(1.5 * k);
   const rx1 = ox + W - pad;
-  const rw = rx1 - rx0;
+  const rw = Math.max(mm(10), rx1 - rx0);
 
   let textRight = rx1;
   if (ctx.logo) {
-    const ls = mm(9);
-    try { doc.image(ctx.logo, rx1 - ls, oy + mm(4.2), { fit: [ls, ls], align: 'center', valign: 'center' }); } catch { /* شعار تالف */ }
-    textRight = rx1 - ls - mm(1.5);
+    const ls = mm(9 * k);
+    try { doc.image(ctx.logo, rx1 - ls, oy + mm(4.2 * k), { fit: [ls, ls], align: 'center', valign: 'center' }); } catch { /* شعار تالف */ }
+    textRight = rx1 - ls - mm(1.5 * k);
   }
-  const tw = textRight - rx0;
-  drawText(doc, ctx.mosque, rx0, oy + mm(5.0), tw, { size: 10.5, bold: true, color: BRAND, rtl: true, align: 'right', minSize: 6.5 });
-  drawText(doc, ctx.campaign, rx0, oy + mm(9.6), tw, { size: 7.5, color: MUTED, rtl: true, align: 'right', minSize: 5.5 });
+  const tw = Math.max(mm(8), textRight - rx0);
+  drawText(doc, ctx.mosque, rx0, oy + mm(5.0 * k), tw, { size: 10.5 * k, bold: true, color: BRAND, rtl: true, align: 'right', minSize: 5 * k });
+  drawText(doc, ctx.campaign, rx0, oy + mm(9.6 * k), tw, { size: 7.5 * k, color: MUTED, rtl: true, align: 'right', minSize: 4.5 * k });
 
   // المعرّف بخط كبير
-  drawText(doc, 'معرف الحساب', rx0, oy + mm(17.2), rw, { size: 6.5, color: MUTED, rtl: true, align: 'center' });
-  drawText(doc, publicId, rx0, oy + mm(20.2), rw, { size: 19, bold: true, color: INK, rtl: false, align: 'center', minSize: 12 });
+  drawText(doc, 'معرف الحساب', rx0, oy + mm(17.2 * k), rw, { size: 6.5 * k, color: MUTED, rtl: true, align: 'center', minSize: 4.5 * k });
+  drawText(doc, publicId, rx0, oy + mm(20.2 * k), rw, { size: 19 * k, bold: true, color: INK, rtl: false, align: 'center', minSize: 9 * k });
 
   // مساحة الاسم (فارغة للكتابة اليدوية)
-  const lineY = oy + H - mm(8.5);
+  const lineY = oy + H - mm(8.5 * k);
   const label = 'الاسم:';
-  const lw = runWidth(doc, splitRuns(label), 8, true);
-  drawText(doc, label, rx0, lineY - mm(3.6), rw, { size: 8, bold: true, color: INK, rtl: true, align: 'right' });
-  doc.lineWidth(0.6).strokeColor('#8a9893').moveTo(rx0, lineY).lineTo(rx1 - lw - mm(1.5), lineY).stroke();
+  const lw = runWidth(doc, splitRuns(label), 8 * k, true);
+  drawText(doc, label, rx0, lineY - mm(3.6 * k), rw, { size: 8 * k, bold: true, color: INK, rtl: true, align: 'right', minSize: 5 * k });
+  doc.lineWidth(0.6 * k).strokeColor('#8a9893').moveTo(rx0, lineY).lineTo(Math.max(rx0 + mm(5), rx1 - lw - mm(1.5 * k)), lineY).stroke();
   doc.restore();
 }
 
-function drawFooter(doc, pageNo, pages) {
-  const y = mm(PAGE_H - 12);
+function drawFooter(doc, pageNo, pages, layout) {
+  const pageW = layout.pageW, pageH = layout.pageH;
+  const y = mm(pageH - 10);
   doc.save();
-  drawText(doc, 'اطبع بالحجم الفعلي 100% (بدون ملاءمة الصفحة) — صفحة ' + pageNo + ' من ' + pages, mm(15), y, mm(PAGE_W - 30), { size: 7.5, color: MUTED, rtl: true, align: 'right' });
-  // مسطرة للتحقق من مقياس الطباعة: يجب أن يقيس هذا الخط 100 ملم
-  const x0 = mm(15), len = mm(100);
-  doc.lineWidth(0.5).strokeColor('#000000').moveTo(x0, y + 4).lineTo(x0 + len, y + 4).stroke();
-  doc.moveTo(x0, y).lineTo(x0, y + 8).stroke().moveTo(x0 + len, y).lineTo(x0 + len, y + 8).stroke();
+  drawText(doc, 'اطبع بالحجم الفعلي 100% (بدون ملاءمة الصفحة) — صفحة ' + pageNo + ' من ' + pages, mm(12), y, mm(pageW - 24), { size: 7.5, color: MUTED, rtl: true, align: 'right' });
+  const x0 = mm(12), len = mm(Math.min(100, pageW - 90));
+  if (len >= mm(40)) {
+    doc.lineWidth(0.5).strokeColor('#000000').moveTo(x0, y + 4).lineTo(x0 + len, y + 4).stroke();
+    doc.moveTo(x0, y).lineTo(x0, y + 8).stroke().moveTo(x0 + len, y).lineTo(x0 + len, y + 8).stroke();
+  }
   doc.restore();
 }
 
 /**
- * يولّد PDF للبطاقات ويكتبه إلى stream. ست بطاقات في كل صفحة A4 (عمودان × ثلاثة صفوف).
+ * يولّد PDF للبطاقات ويكتبه إلى stream مع دعم خيارات مقاس الورقة وحجم البطاقة والهوامش.
  * @param {string[]} publicIds
  */
-function renderCardsPdf(publicIds, stream, qrTextFor = (id) => id) {
+function renderCardsPdf(publicIds, stream, qrTextFor = (id) => id, opts = {}) {
   const s = getSettings();
-  const doc = new PDFDocument({ autoFirstPage: false, size: 'A4', margin: 0, info: { Title: 'بطاقات المشاركين', Producer: 'Fajr Campaign' } });
+  const layout = resolveLayout(opts);
+  const { pageW, pageH, cardW, cardH, cols, rows, gapX, gapY, footer } = layout;
+  const pageSizePt = [mm(pageW), mm(pageH)];
+
+  const doc = new PDFDocument({ autoFirstPage: false, size: pageSizePt, margin: 0, info: { Title: 'بطاقات المشاركين', Producer: 'Fajr Campaign' } });
   doc.pipe(stream);
   registerFonts(doc);
   let logo = null;
-  try { const buf = getLogoBuffer(); if (buf) logo = doc.openImage(buf); } catch { logo = null; } // يُضمَّن الشعار مرة واحدة فقط
+  try { const buf = getLogoBuffer(); if (buf) logo = doc.openImage(buf); } catch { logo = null; }
 
-  const perPage = COLS * ROWS;
+  const perPage = cols * rows;
   const pages = Math.max(1, Math.ceil(publicIds.length / perPage));
-  const gridW = COLS * CARD_W + (COLS - 1) * GAP_X;
-  const gridH = ROWS * CARD_H + (ROWS - 1) * GAP_Y;
-  const x0 = (PAGE_W - gridW) / 2;
-  const y0 = (PAGE_H - gridH) / 2 - 4;
+  const gridW = cols * cardW + (cols - 1) * gapX;
+  const gridH = rows * cardH + (rows - 1) * gapY;
+  const x0 = (pageW - gridW) / 2;
+  const y0 = footer ? Math.max(layout.margin, (pageH - 10 - gridH) / 2) : (pageH - gridH) / 2;
   const ctx = { logo, mosque: s.mosque_name, campaign: s.campaign_name, qrTextFor };
 
   for (let i = 0; i < publicIds.length; i++) {
     const slot = i % perPage;
-    if (slot === 0) doc.addPage({ size: 'A4', margin: 0 });
-    const col = slot % COLS, row = Math.floor(slot / COLS);
+    if (slot === 0) {
+      doc.addPage({ size: pageSizePt, margin: 0 });
+      drawSheetGridMarks(doc, x0, y0, layout);
+    }
+    const col = slot % cols, row = Math.floor(slot / cols);
     // اتجاه RTL: العمود الأول في اليمين
-    const cx = mm(x0 + (COLS - 1 - col) * (CARD_W + GAP_X));
-    const cy = mm(y0 + row * (CARD_H + GAP_Y));
-    drawCard(doc, publicIds[i], cx, cy, ctx);
-    drawCropMarks(doc, cx, cy, mm(CARD_W), mm(CARD_H));
-    if (slot === perPage - 1 || i === publicIds.length - 1) drawFooter(doc, Math.floor(i / perPage) + 1, pages);
+    const cx = mm(x0 + (cols - 1 - col) * (cardW + gapX));
+    const cy = mm(y0 + row * (cardH + gapY));
+    drawCard(doc, publicIds[i], cx, cy, ctx, layout);
+    if (gapX >= 8 && gapY >= 8) drawCropMarks(doc, cx, cy, mm(cardW), mm(cardH), layout);
+    if (footer && (slot === perPage - 1 || i === publicIds.length - 1)) {
+      drawFooter(doc, Math.floor(i / perPage) + 1, pages, layout);
+    }
   }
-  if (publicIds.length === 0) { doc.addPage({ size: 'A4', margin: 0 }); }
+  if (publicIds.length === 0) { doc.addPage({ size: pageSizePt, margin: 0 }); }
   doc.end();
   return pages;
 }
 
-module.exports = { renderCardsPdf, CARD_W, CARD_H };
+module.exports = { renderCardsPdf, resolveLayout, CARD_W, CARD_H };

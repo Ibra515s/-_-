@@ -38,7 +38,7 @@ export default async function view() {
     bar.replaceChildren(selected.size ? h('div', { class: 'sticky-bar' },
       h('span', null, `${selected.size} محدد`),
       h('div', { class: 'row' },
-        h('button', { class: 'btn btn-primary btn-sm', onclick: () => exportCards({ scope: 'ids', ids: [...selected] }) }, icon('card'), 'طباعة بطاقات المحدد'),
+        h('button', { class: 'btn btn-primary btn-sm', onclick: () => exportCardsModal({ scope: 'ids', ids: [...selected] }) }, icon('card'), 'طباعة بطاقات المحدد'),
         h('button', { class: 'btn btn-sm', onclick: () => { selected.clear(); drawBar(); document.querySelectorAll('.sel').forEach((c) => { c.checked = false; }); } }, 'إلغاء التحديد'))) : '');
   }
 
@@ -97,7 +97,7 @@ export default async function view() {
               h('span', { class: 'num' }, `تاريخ التفعيل: ${fmtDateTime(p.activated_at)}`))),
         err,
         h('div', { class: 'row' },
-          h('button', { class: 'btn', onclick: () => exportCards({ scope: 'ids', ids: [p.id] }) }, icon('card'), 'طباعة البطاقة'),
+          h('button', { class: 'btn', onclick: () => exportCardsModal({ scope: 'ids', ids: [p.id] }) }, icon('card'), 'طباعة البطاقة'),
           p.status === 'suspended'
             ? h('button', { class: 'btn', onclick: async () => { if (await confirmDialog({ title: 'إعادة تفعيل الحساب', message: 'سيتمكن المشارك من الدخول وتسجيل الحضور مجددًا.', confirmText: 'إعادة التفعيل' })) act(() => api.post(`/admin/participants/${id}/unsuspend`), 'تمت إعادة التفعيل'); } }, 'إلغاء الإيقاف')
             : h('button', { class: 'btn', onclick: async () => { const r = await confirmDialog({ title: 'إيقاف الحساب', message: 'لن يستطيع الدخول أو تسجيل الحضور. تبقى سجلاته ونقاطه محفوظة.', confirmText: 'إيقاف', danger: true, withReason: true }); if (r) act(() => api.post(`/admin/participants/${id}/suspend`, { reason: r }), 'تم إيقاف الحساب'); } }, 'إيقاف الحساب'),
@@ -135,7 +135,7 @@ export default async function view() {
           h('td', { 'data-label': 'الدفعة', class: 'num' }, b.id), h('td', { 'data-label': 'العدد', class: 'num' }, b.count),
           h('td', { 'data-label': 'مفعّلة', class: 'num' }, b.active), h('td', { 'data-label': 'بانتظار التفعيل', class: 'num' }, b.pending),
           h('td', { 'data-label': 'التاريخ', class: 'num' }, fmtDateTime(b.created_at)),
-          h('td', { 'data-label': '', class: 'actions' }, h('button', { class: 'btn btn-sm', onclick: () => exportCards({ scope: 'batch', batch_id: b.id }) }, icon('card'), 'إعادة طباعة')))))))
+          h('td', { 'data-label': '', class: 'actions' }, h('button', { class: 'btn btn-sm', onclick: () => exportCardsModal({ scope: 'batch', batch_id: b.id }) }, icon('card'), 'إعادة طباعة')))))))
         : empty('لا توجد دفعات بعد.'),
     });
   }

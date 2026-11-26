@@ -1,5 +1,5 @@
 // ط¹ط§ظ…ظ„ ط®ط¯ظ…ط© ط¨ط³ظٹط·: ظٹط®ط²ظ‘ظ† ظ…ظ„ظپط§طھ ط§ظ„ظˆط§ط¬ظ‡ط© ط§ظ„ط«ط§ط¨طھط© ظپظ‚ط· (ظ„ط§ ظٹط®ط²ظ‘ظ† ط£ظٹ ط·ظ„ط¨ط§طھ API ط£ظˆ ط¨ظٹط§ظ†ط§طھ).
-const CACHE = 'fajr-shell-v7';
+const CACHE = 'fajr-shell-v8';
 const SHELL = ['/', '/css/app.css', '/js/app.js', '/js/api.js', '/js/dom.js', '/js/scanner.js', '/icons/icon-192.png'];
 
 self.addEventListener('install', (e) => {

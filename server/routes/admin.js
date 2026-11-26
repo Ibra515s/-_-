@@ -231,12 +231,19 @@ router.post('/admin/cards/pdf', async (req, res) => {
   if (b.scope === 'batch') filter = { batch_id: int(b.batch_id, 0, 0, 1e9) };
   else if (b.scope === 'ids') filter = { _id: { $in: (Array.isArray(b.ids) ? b.ids : []).map(Number).filter(Number.isInteger).slice(0, 20000) } };
   else if (b.scope === 'pending') filter = { status: 'pending' };
-  const rows = await C.participants.find(filter, { projection: { public_id: 1 } }).sort({ _id: 1 }).toArray();
+  const sortMap = {
+    id_asc: { _id: 1 },
+    id_desc: { _id: -1 },
+    code_asc: { public_id: 1 },
+    name_asc: { full_name: 1, _id: 1 },
+  };
+  const sort = sortMap[b.order] || sortMap.id_asc;
+  const rows = await C.participants.find(filter, { projection: { public_id: 1 } }).sort(sort).toArray();
   if (!rows.length) throw new HttpError(400, 'nothing_to_export', 'لا توجد بطاقات للتصدير.');
-  await logAction(A.actorOf(req), 'cards_exported', b.scope || 'all', { count: rows.length, batch_id: b.batch_id ?? null });
+  await logAction(A.actorOf(req), 'cards_exported', b.scope || 'all', { count: rows.length, batch_id: b.batch_id ?? null, paper: b.layout?.paper || 'A4' });
   res.set({ 'Content-Type': 'application/pdf', 'Content-Disposition': `attachment; filename="cards-${today()}.pdf"`, 'Cache-Control': 'no-store' });
   const base = U.publicBase(req);
-  renderCardsPdf(rows.map((r) => r.public_id), res, (id) => U.cardUrl(base, id));
+  renderCardsPdf(rows.map((r) => r.public_id), res, (id) => U.cardUrl(base, id), b.layout || {});
 });
 
 // ---------- تصدير الحسابات (CSV) ----------
