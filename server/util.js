@@ -149,10 +149,7 @@ function validateAge(raw) {
 }
 
 function validatePhone(raw) {
-  if (raw === null || raw === undefined) return null;
-  const s = String(raw).trim();
-  if (s === '') return null;
-  const p = toLatinDigits(s).replace(/[\s\-().]/g, '');
+  const p = toLatinDigits(raw).replace(/[\s\-().]/g, '');
   if (!/^\+?\d{8,15}$/.test(p)) throw new HttpError(400, 'invalid_phone', 'رقم الهاتف غير صحيح.');
   return p;
 }

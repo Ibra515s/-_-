@@ -102,11 +102,8 @@ test('3) تفعيل الحساب ثم الدخول اليدوي والملف ا�
   const mismatch = await new Client().post('/api/auth/activate', { account_id: id, full_name: 'محمد أحمد علي الحربي', age: 25, phone: '0551234567', password: 'secret123', confirm_password: 'other123' });
   assert.equal(mismatch.status, 400);
 
-  const id2 = ids[1];
-  const noPhone = await new Client().post('/api/auth/activate', { account_id: id2, full_name: 'سالم سعد علي الغامدي', age: 30, phone: '', password: 'secret123', confirm_password: 'secret123' });
-  assert.equal(noPhone.status, 200, 'التفعيل ينجح بدون رقم هاتف');
-  const savedP2 = await C.participants.findOne({ public_id: id2 });
-  assert.equal(savedP2.phone, null);
+  const noPhone = await new Client().post('/api/auth/activate', { account_id: id, full_name: 'سالم سعد علي الغامدي', age: 30, phone: '', password: 'secret123', confirm_password: 'secret123' });
+  assert.equal(noPhone.status, 400, 'يرفض التفعيل بدون رقم هاتف');
 
   const { c, r } = await activate(id);
   assert.equal(r.status, 200);

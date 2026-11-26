@@ -109,7 +109,7 @@ export async function activateView() {
   const idInput = h('input', { class: 'input ltr', autocapitalize: 'characters', autocorrect: 'off', spellcheck: false, placeholder: 'FJ-XXXXX', required: true, maxlength: 12, value: prefill });
   const name = h('input', { class: 'input', autocomplete: 'name', required: true, maxlength: 120 });
   const age = h('input', { class: 'input ltr', type: 'text', inputmode: 'numeric', required: true, maxlength: 3 });
-  const phone = h('input', { class: 'input ltr', type: 'tel', inputmode: 'tel', autocomplete: 'tel', maxlength: 20, placeholder: '05XXXXXXXX (اختياري)' });
+  const phone = h('input', { class: 'input ltr', type: 'tel', inputmode: 'tel', autocomplete: 'tel', required: true, maxlength: 20, placeholder: '07XXXXXXXX' });
   const pw = passwordField('كلمة المرور', 'new-password', 'new-password');
   const pw2 = passwordField('تأكيد كلمة المرور', 'confirm', 'new-password');
   const errBox = h('div');
@@ -140,7 +140,7 @@ export async function activateView() {
       h('button', { type: 'button', class: 'btn', style: { alignSelf: 'flex-end' }, onclick: scanCard }, icon('scan'), 'مسح')),
     camBox,
     field('الاسم الرباعي', name, 'مثال: محمد أحمد علي الحربي'),
-    h('div', { class: 'grid2' }, field('العمر (بالسنوات)', age), field('رقم الهاتف (اختياري)', phone)),
+    h('div', { class: 'grid2' }, field('العمر (بالسنوات)', age), field('رقم الهاتف', phone)),
     pw.el, pw2.el, errBox, submit);
   form.addEventListener('submit', async (e) => {
     e.preventDefault();

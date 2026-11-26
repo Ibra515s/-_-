@@ -89,7 +89,7 @@ export default async function view() {
         p.status === 'pending'
           ? h('p', { class: 'muted' }, 'هذا الحساب لم يُفعَّل بعد؛ ستظهر بياناته بعد أن يمسح صاحبه البطاقة ويكمل النموذج.')
           : h('div', { class: 'stack-sm' },
-            h('div', { class: 'grid2' }, field('الاسم الرباعي', name), h('div', { class: 'grid2' }, field('العمر', age), field('الهاتف (اختياري)', phone))),
+            h('div', { class: 'grid2' }, field('الاسم الرباعي', name), h('div', { class: 'grid2' }, field('العمر', age), field('الهاتف', phone))),
             h('div', null, h('button', { class: 'btn btn-sm', onclick: () => act(() => api.patch(`/admin/participants/${id}`, { full_name: name.value, age: age.value, phone: phone.value }), 'تم حفظ البيانات') }, 'حفظ التعديلات')),
             h('div', { class: 'row small muted' },
               h('span', null, `النقاط: ${d.standing.points}`), h('span', null, d.standing.rank ? `الترتيب: ${d.standing.rank}` : 'الترتيب: —'),
